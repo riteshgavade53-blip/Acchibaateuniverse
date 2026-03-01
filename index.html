@@ -1,0 +1,491 @@
+﻿<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cosmic Thought Universe - Divine Space</title>
+
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Noto+Sans+Devanagari:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="./assets/css/style.css">
+</head>
+<body onload="initApp()">
+<!-- Progress Bar -->
+<div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+
+<!-- Edit Mode Indicator -->
+<div class="edit-mode-indicator" id="editModeIndicator">
+<i class="fas fa-edit"></i> Edit Mode Active
+</div>
+
+<!-- Mode Switcher (shown when logged in as owner) -->
+<div id="modeSwitcher" onclick="switchMode()">
+<i class="fas fa-exchange-alt"></i>
+<span id="modeSwitchText">Switch to Visitor</span>
+</div>
+
+<!-- Owner Badge (shown only to owner) -->
+<div id="ownerBadge">
+<i class="fas fa-crown"></i> OWNER MODE
+</div>
+
+<!-- Visitor Info (shown only to visitors) -->
+<div id="visitorInfo">
+<h4 style="margin: 0 0 10px 0; color: var(--neon);">&#x1F30C; Welcome to the Universe</h4>
+<p style="margin: 0; font-size: 14px; opacity: 0.8;">You're viewing a universe of thoughts. Click on stars to explore!</p>
+<button class="btn-secondary" style="margin-top: 10px; width: 100%;" onclick="showHistory()">
+<i class="fas fa-book"></i> View All Thoughts
+</button>
+</div>
+
+<!-- Owner Login Prompt (shown in visitor mode if owner is logged in) -->
+<div id="ownerLoginPrompt" onclick="switchToOwner()">
+<i class="fas fa-crown"></i> Switch to Owner
+</div>
+
+<!-- Login Screen -->
+<div id="loginScreen">
+<div class="login-container">
+<h2>&#x1F510; Universe Access</h2>
+<p style="margin-bottom: 20px; opacity: 0.8;">Choose your access level:</p>
+
+<div class="login-options">
+<button class="btn-main" onclick="loginAsOwner()">Owner Login</button>
+<button class="btn-secondary" onclick="loginAsVisitor()">View as Visitor</button>
+</div>
+
+<div id="ownerLogin" style="display: none; margin-top: 20px;">
+<input type="password" id="passInput" placeholder="Enter your password" onkeypress="if(event.key === 'Enter') unlock()">
+<button class="btn-main" onclick="unlock()">Unlock Universe</button>
+</div>
+</div>
+</div>
+
+<!-- Search Bar -->
+<div id="searchBar">
+<i class="fas fa-search"></i>
+<input type="text" id="searchInput" placeholder="Search the universe..." oninput="searchStars()">
+</div>
+
+<!-- Settings Panel (Owner Only) -->
+<div id="settingsPanel">
+<div class="settings-header">
+<h3>Universe Settings</h3>
+<button class="btn-secondary" onclick="toggleSettings()"><i class="fas fa-times"></i></button>
+</div>
+
+<div class="settings-group">
+<div class="settings-item">
+<label for="themeToggle">Light Theme</label>
+<label class="toggle-switch">
+<input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+<span class="slider"></span>
+</label>
+</div>
+
+<div class="settings-item">
+<label for="soundToggle">Sound Effects</label>
+<label class="toggle-switch">
+<input type="checkbox" id="soundToggle" checked onchange="toggleSound()">
+<span class="slider"></span>
+</label>
+</div>
+
+<div class="settings-item">
+<label for="animationToggle">Animations</label>
+<label class="toggle-switch">
+<input type="checkbox" id="animationToggle" checked onchange="toggleAnimations()">
+<span class="slider"></span>
+</label>
+</div>
+
+<div class="settings-item">
+<label for="duplicateCheck">Duplicate Check</label>
+<label class="toggle-switch">
+<input type="checkbox" id="duplicateCheck" checked onchange="toggleDuplicateCheck()">
+<span class="slider"></span>
+</label>
+</div>
+</div>
+
+<div class="settings-group">
+<button class="btn-secondary" style="width: 100%;" onclick="exportData()">
+<i class="fas fa-file-excel"></i> Export to Excel
+</button>
+<button class="btn-secondary" style="width: 100%; margin-top: 10px;" onclick="importData()">
+<i class="fas fa-file-upload"></i> Import from Excel
+</button>
+<button class="btn-secondary" style="width: 100%; margin-top: 10px; background: var(--danger);" onclick="clearAllData()">Clear All Data</button>
+</div>
+</div>
+
+<!-- Stats Panel (Owner Only) -->
+<div id="statsPanel">
+<div class="settings-header">
+<h3>Universe Stats</h3>
+<button class="btn-secondary" onclick="toggleStats()"><i class="fas fa-times"></i></button>
+</div>
+
+<div class="stat-item">
+<div class="stat-icon">
+<i class="fas fa-star"></i>
+</div>
+<div class="stat-info">
+<h4>Total Stars</h4>
+<p id="totalStars">0</p>
+</div>
+</div>
+
+<div class="stat-item">
+<div class="stat-icon">
+<i class="fas fa-calendar-alt"></i>
+</div>
+<div class="stat-info">
+<h4>Days Active</h4>
+<p id="daysActive">0</p>
+</div>
+</div>
+
+<div class="stat-item">
+<div class="stat-icon">
+<i class="fas fa-pen"></i>
+</div>
+<div class="stat-info">
+<h4>Words Written</h4>
+<p id="wordsWritten">0</p>
+</div>
+</div>
+</div>
+
+<!-- Enhanced Zoom Controls -->
+<div class="zoom-controls">
+<div class="zoom-level" id="zoomLevel">100%</div>
+<div class="zoom-slider-container">
+<button class="zoom-btn" onclick="zoomIn()" title="Zoom In">
+<i class="fas fa-plus"></i>
+</button>
+<input type="range" class="zoom-slider" id="zoomSlider" min="30" max="300" value="100" oninput="setZoom(this.value)">
+<button class="zoom-btn" onclick="zoomOut()" title="Zoom Out">
+<i class="fas fa-minus"></i>
+</button>
+</div>
+<button class="zoom-btn" onclick="resetZoom()" title="Reset View">
+<i class="fas fa-home"></i>
+</button>
+</div>
+
+<!-- Recycle Bin Button (Owner Only) -->
+<button id="recycleBinBtn" onclick="openRecycleBin()" title="Recycle Bin">
+<i class="fas fa-trash-alt"></i>
+<span id="recycleBinCount">0</span>
+</button>
+
+<!-- Realistic Universe Background -->
+<div id="universe-container">
+<!-- Galaxy Map (visible when zoomed out) -->
+<div id="galaxyMap">
+<!-- Multiple galaxies will be added here dynamically -->
+</div>
+
+<!-- Stars Background Layer -->
+<div class="stars-layer" id="starsLayer"></div>
+
+<!-- Nebula -->
+<div id="nebula"></div>
+
+<!-- Black Hole 1 -->
+<div class="black-hole" style="width: 100px; height: 100px; top: 20%; left: 15%;">
+<div class="gravitational-lens"></div>
+<div class="accretion-disk"></div>
+<div class="black-hole-core"></div>
+</div>
+
+<!-- Black Hole 2 -->
+<div class="black-hole" style="width: 80px; height: 80px; bottom: 25%; right: 20%;">
+<div class="gravitational-lens"></div>
+<div class="accretion-disk"></div>
+<div class="black-hole-core"></div>
+</div>
+
+<!-- Galaxy -->
+<div class="galaxy"></div>
+
+<!-- Nebula Cloud -->
+<div class="nebula-cloud"></div>
+
+<!-- Sun with Corona -->
+<div class="sun">
+<div class="corona"></div>
+<div class="sun-core"></div>
+</div>
+
+<!-- Planets -->
+<div class="planet mercury">
+<div class="planet-info">Mercury</div>
+</div>
+<div class="planet venus">
+<div class="planet-info">Venus</div>
+</div>
+<div class="planet earth">
+<div class="planet-info">Earth</div>
+</div>
+<div class="planet mars">
+<div class="planet-info">Mars</div>
+</div>
+<div class="planet jupiter">
+<div class="planet-info">Jupiter</div>
+</div>
+<div class="planet saturn">
+<div class="saturn-ring"></div>
+<div class="planet-info">Saturn</div>
+</div>
+<div class="planet uranus">
+<div class="planet-info">Uranus</div>
+</div>
+<div class="planet neptune">
+<div class="planet-info">Neptune</div>
+</div>
+<div class="planet pluto">
+<div class="planet-info">Pluto</div>
+</div>
+
+<!-- Asteroid Belt -->
+<div class="asteroid-belt" id="asteroidBelt"></div>
+
+<!-- Comet -->
+<div class="comet">
+<div class="comet-tail"></div>
+</div>
+
+<!-- Moon -->
+<div class="moon"></div>
+
+<!-- Shiva - Divine Cosmic Entity -->
+<div class="shiva-container" onclick="shivaMessage()">
+<div class="shiva-body"></div>
+<div class="shiva-trident">
+<div class="trident-prong"></div>
+<div class="trident-prong"></div>
+<div class="trident-prong"></div>
+</div>
+<div class="shiva-third-eye"></div>
+<div class="shiva-moon"></div>
+<div class="shiva-snake"></div>
+<div class="shiva-damru"></div>
+<div class="shiva-river"></div>
+<div class="shiva-info">Lord Shiva - Cosmic Creator</div>
+</div>
+
+<!-- Astronaut -->
+<div class="astronaut" onclick="astronautMessage()">&#x1F468;&#x200D;&#x1F680;</div>
+
+<!-- User Stars (Thoughts) -->
+<div id="galaxy-field"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<!-- Star Modal (View-only for visitors) -->
+<div id="starModal" class="modal">
+<div class="modal-header">
+<h3 style="margin: 0; color: var(--neon);">Star Message</h3>
+<button class="btn-secondary" style="padding: 5px 10px;" onclick="closeStarModal()"><i class="fas fa-times"></i></button>
+</div>
+
+<!-- Navigation Buttons -->
+<div class="modal-navigation">
+<button class="nav-btn" id="prevThoughtBtn" onclick="navigateToPrevThought()" title="Previous Thought">
+<i class="fas fa-chevron-left"></i>
+</button>
+<div class="thought-counter" id="thoughtCounter">1 / 1</div>
+<button class="nav-btn" id="nextThoughtBtn" onclick="navigateToNextThought()" title="Next Thought">
+<i class="fas fa-chevron-right"></i>
+</button>
+</div>
+
+<div id="mDate" style="color:var(--gold); font-size:14px; margin-bottom:15px;"></div>
+<div class="modal-content">
+<!-- Thought Editor for Owners -->
+<div id="thoughtEditorContainer" class="thought-edit-mode">
+<div class="thought-edit-header">
+<span>Editing Thought</span>
+<button class="edit-btn" style="padding: 4px 8px; font-size: 12px;" onclick="cancelThoughtEdit()">
+<i class="fas fa-times"></i> Cancel
+</button>
+</div>
+
+<!-- Edit Toolbar -->
+<div class="edit-toolbar">
+<button class="edit-btn" onclick="formatThoughtText('bold')"><i class="fas fa-bold"></i></button>
+<button class="edit-btn" onclick="formatThoughtText('italic')"><i class="fas fa-italic"></i></button>
+<button class="edit-btn" onclick="formatThoughtText('underline')"><i class="fas fa-underline"></i></button>
+<button class="edit-btn" onclick="insertThoughtEmoji()"><i class="fas fa-smile"></i></button>
+</div>
+
+<!-- Editable Thought Content -->
+<div id="thoughtEditor" class="thought-editor" contenteditable="true"></div>
+
+<!-- Tag Selection -->
+<div class="tag-edit-container">
+<div class="tag-edit-title">Change Tag:</div>
+<select class="tag-select" id="tagSelect">
+<option value="personal">Personal</option>
+<option value="work">Work</option>
+<option value="ideas">Ideas</option>
+</select>
+<div class="tag-new-container">
+<input type="text" class="tag-new-input" id="tagNewInput" placeholder="Create new tag">
+<button class="tag-new-btn" onclick="addTagFromModal()">Add</button>
+</div>
+</div>
+</div>
+
+<!-- Read-only Thought Display -->
+<div id="thoughtDisplay">
+<div id="mText" style="font-size:18px; font-style:italic; margin-bottom: 15px;"></div>
+<div class="category-pills" id="starCategories"></div>
+</div>
+</div>
+<div class="modal-actions" id="starActions">
+<!-- Edit/Delete buttons will be shown only to owner -->
+</div>
+</div>
+
+<!-- Recycle Bin Modal (Owner Only) -->
+<div id="recycleBinModal">
+<div class="modal-header">
+<h3 style="margin: 0; color: var(--danger);">&#x1F5D1;&#xFE0F; Recycle Bin</h3>
+<button class="btn-secondary" style="padding: 5px 10px;" onclick="closeRecycleBin()"><i class="fas fa-times"></i></button>
+</div>
+<div class="modal-content" id="recycleBinContent">
+<!-- Deleted thoughts will be displayed here -->
+</div>
+<div class="modal-actions">
+<button class="btn-danger" onclick="emptyRecycleBin()">
+<i class="fas fa-trash"></i> Empty Recycle Bin
+</button>
+<button class="btn-secondary" onclick="closeRecycleBin()">
+<i class="fas fa-times"></i> Close
+</button>
+</div>
+</div>
+
+<!-- Log Modal (View-only for visitors) -->
+<div id="logModal" class="overlay">
+<div style="max-width: 900px; margin: auto;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 15px;">
+<h1 style="color:var(--neon); text-align:center; margin: 0;">&#x1F30C; Universe Log</h1>
+<div style="display: flex; gap: 10px;">
+<!-- Recycle Bin Button in Log Modal -->
+<button class="log-recycle-btn" onclick="openRecycleBinFromLog()">
+<i class="fas fa-trash-alt"></i> Recycle Bin
+<span class="recycle-badge" id="logRecycleCount">0</span>
+</button>
+<button class="btn-secondary" onclick="closeLog()"><i class="fas fa-times"></i> Close</button>
+</div>
+</div>
+
+<div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
+<div class="category-pills" id="filterCategories">
+<div class="category-pill active" onclick="filterByCategory('all')">All</div>
+<div class="category-pill" onclick="filterByCategory('personal')">Personal</div>
+<div class="category-pill" onclick="filterByCategory('work')">Work</div>
+<div class="category-pill" onclick="filterByCategory('ideas')">Ideas</div>
+</div>
+
+<div>
+<button class="btn-secondary" onclick="sortStars('date')"><i class="fas fa-calendar"></i> Date</button>
+<button class="btn-secondary" onclick="sortStars('text')"><i class="fas fa-sort-alpha-down"></i> A-Z</button>
+</div>
+</div>
+
+<div id="logContent" style="margin-top:20px; max-height: 60vh; overflow-y: auto;"></div>
+</div>
+</div>
+
+<!-- Import Progress Modal -->
+<div id="importProgressModal">
+<h3 style="color: var(--neon); margin-bottom: 15px;">Importing Data</h3>
+<p id="importStatus" style="margin-bottom: 15px;">Processing file...</p>
+<div class="progress-container">
+<div class="progress-fill" id="importProgress"></div>
+</div>
+<button class="btn-secondary" id="importCloseBtn" style="display: none; margin-top: 15px;" onclick="closeImportProgressModal()">Close</button>
+</div>
+
+<!-- Writing Panel (Owner Only) -->
+<div id="writingPanel">
+<div class="toggle-icon" onclick="togglePanel()">&#x270D;&#xFE0F;</div>
+<div class="content-wrap">
+<div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+<span style="color:var(--neon); font-weight:bold;">Space Editor &#x1FA90;</span>
+<button onclick="togglePanel()" style="background:none; border:none; color:#777; cursor:pointer;">Minimize &#x2198;&#xFE0F;</button>
+</div>
+
+<div class="toolbar">
+<div class="tool-group">
+<button class="tool-btn" onclick="formatText('bold')"><i class="fas fa-bold"></i></button>
+<button class="tool-btn" onclick="formatText('italic')"><i class="fas fa-italic"></i></button>
+<button class="tool-btn" onclick="formatText('underline')"><i class="fas fa-underline"></i></button>
+</div>
+
+<div class="tool-group">
+<button class="tool-btn" onclick="startVoice()"><i class="fas fa-microphone"></i></button>
+<button class="tool-btn" onclick="insertEmoji()"><i class="fas fa-smile"></i></button>
+</div>
+
+<div class="tool-group">
+<button class="tool-btn" style="background:var(--purple);" onclick="showHistory()"><i class="fas fa-history"></i> Log</button>
+</div>
+</div>
+
+<!-- Duplicate Warning Box -->
+<div id="duplicateWarningBox" class="duplicate-warning-box">
+<div class="duplicate-warning-title">
+<i class="fas fa-exclamation-triangle"></i>
+<span id="duplicateWarningText">Similar thought found!</span>
+</div>
+<div id="similarThoughtsList" class="similar-thoughts"></div>
+</div>
+
+<!-- Enhanced Category Selection with Plus Button -->
+<div class="category-pills" id="editorCategories">
+<div class="category-pill" onclick="selectCategory(this, 'personal')">Personal</div>
+<div class="category-pill" onclick="selectCategory(this, 'work')">Work</div>
+<div class="category-pill" onclick="selectCategory(this, 'ideas')">Ideas</div>
+<input type="text" class="new-category-input" id="newCategoryInput" placeholder="New category" onkeypress="handleNewCategoryKeypress(event)" style="display: none;">
+<button class="plus-category-btn" id="plusCategoryBtn" onclick="showAddCategoryInput()">
+<i class="fas fa-plus"></i> Add
+</button>
+</div>
+
+<div id="editor" contenteditable="true" placeholder="Write your thoughts here..." oninput="checkForDuplicates()"></div>
+<button class="btn-main" style="width:100%;" id="saveButton" onclick="saveThought()">Sitara Banayein &#x2728;</button>
+</div>
+</div>
+
+<!-- Floating Action Buttons (Owner Only) -->
+<div class="fab-container">
+<button class="fab fab-settings" onclick="toggleSettings()" title="Settings">
+<i class="fas fa-cog"></i>
+</button>
+<button class="fab fab-stats" onclick="toggleStats()" title="Statistics">
+<i class="fas fa-chart-bar"></i>
+</button>
+</div>
+
+<!-- Toast Notification -->
+<div class="toast" id="toast">
+<i class="fas fa-info-circle"></i>
+<span id="toastMessage">Notification message</span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./assets/js/supabase-config.js"></script>
+<script src="./assets/js/app.js"></script>
+</body>
+</html>
