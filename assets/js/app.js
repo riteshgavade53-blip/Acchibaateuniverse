@@ -450,6 +450,60 @@ plusBtn.style.display = 'none';
 inputField.focus();
 }
 
+function normalizeCategoryName(rawName) {
+return (rawName || '').replace(/\s+/g, ' ').trim();
+}
+
+function hasCategory(categoryName) {
+const normalized = normalizeCategoryName(categoryName).toLowerCase();
+if (!normalized) return false;
+
+const defaultCategories = ['personal', 'work', 'ideas'];
+if (defaultCategories.includes(normalized)) {
+return true;
+}
+
+return customCategories.some((category) => category.toLowerCase() === normalized);
+}
+
+function addCategoryAndRefresh(categoryName, options = {}) {
+const normalized = normalizeCategoryName(categoryName);
+const { selectInEditor = false, selectInTag = false } = options;
+
+if (!normalized) {
+showToast('Please enter a category name', 'warning');
+return false;
+}
+
+if (hasCategory(normalized)) {
+showToast('This category already exists', 'warning');
+return false;
+}
+
+customCategories.push(normalized);
+saveCustomCategories();
+loadCustomCategories();
+
+if (selectInEditor) {
+const categoryPills = document.querySelectorAll('#editorCategories .category-pill');
+categoryPills.forEach((pill) => {
+if (pill.textContent === normalized) {
+selectCategory(pill, normalized);
+}
+});
+}
+
+if (selectInTag) {
+const tagSelect = document.getElementById('tagSelect');
+if (tagSelect) {
+tagSelect.value = normalized;
+}
+}
+
+showToast(`Category "${normalized}" added successfully`, 'success');
+return true;
+}
+
 function handleNewCategoryKeypress(event) {
 if (event.key === 'Enter') {
 addCustomCategory();
@@ -460,39 +514,11 @@ hideAddCategoryInput();
 
 function addCustomCategory() {
 const inputField = document.getElementById('newCategoryInput');
-const categoryName = inputField.value.trim();
-
-if (categoryName === '') {
-showToast('Please enter a category name', 'warning');
-return;
-}
-
-// Check if category already exists
-if (customCategories.includes(categoryName) ||
-['personal', 'work', 'ideas'].includes(categoryName.toLowerCase())) {
-showToast('This category already exists', 'warning');
-return;
-}
-
-// Add to custom categories
-customCategories.push(categoryName);
-saveCustomCategories();
-
-// Reload categories
-loadCustomCategories();
-
-// Select the new category
-const categoryPills = document.querySelectorAll('#editorCategories .category-pill');
-categoryPills.forEach(pill => {
-if (pill.textContent === categoryName) {
-selectCategory(pill, categoryName);
-}
-});
-
-// Hide input field
+const categoryName = inputField.value;
+const added = addCategoryAndRefresh(categoryName, { selectInEditor: true, selectInTag: true });
+if (added) {
 hideAddCategoryInput();
-
-showToast(`Category "${categoryName}" added successfully`, 'success');
+}
 }
 
 function hideAddCategoryInput() {
@@ -507,35 +533,11 @@ inputField.value = '';
 // Add tag from modal
 function addTagFromModal() {
 const tagInput = document.getElementById('tagNewInput');
-const tagName = tagInput.value.trim();
-
-if (tagName === '') {
-showToast('Please enter a tag name', 'warning');
-return;
-}
-
-// Check if tag already exists
-if (customCategories.includes(tagName) ||
-['personal', 'work', 'ideas'].includes(tagName.toLowerCase())) {
-showToast('This tag already exists', 'warning');
-return;
-}
-
-// Add to custom categories
-customCategories.push(tagName);
-saveCustomCategories();
-
-// Update tag options
-updateTagOptions();
-
-// Select the new tag
-const tagSelect = document.getElementById('tagSelect');
-tagSelect.value = tagName;
-
-// Clear input
+const tagName = tagInput.value;
+const added = addCategoryAndRefresh(tagName, { selectInTag: true });
+if (added) {
 tagInput.value = '';
-
-showToast(`Tag "${tagName}" added successfully`, 'success');
+}
 }
 
 // ZOOM FUNCTIONS - ENHANCED
@@ -968,6 +970,7 @@ showToast('Edit mode disabled.', 'info');
 // THOUGHT EDITING FUNCTIONS
 function enableThoughtEdit() {
 if (!isOwner || currentStarIndex === -1) return;
+updateTagOptions();
 
 // Get the current thought
 const star = thoughts[currentStarIndex];
@@ -2152,4 +2155,3 @@ navigateToNextThought();
 }
 }
 });
-
