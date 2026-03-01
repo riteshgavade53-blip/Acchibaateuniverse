@@ -23,6 +23,8 @@ customCategories: 'custom_categories'
 const APP_STATE_ROW_ID = 'main';
 let supabaseClient = null;
 let supabaseReady = false;
+let lastRemoteUpdatedAt = 0;
+let cloudSyncIntervalId = null;
 
 function clamp(value, min, max) {
 return Math.min(max, Math.max(min, value));
@@ -136,17 +138,17 @@ localStorage.setItem(STORAGE_KEYS.customCategories, JSON.stringify(customCategor
 
 function saveThoughts() {
 syncLocalCache();
-void syncDataToSupabase();
+void syncDataToSupabase({ showErrorToast: true });
 }
 
 function saveDeletedThoughts() {
 syncLocalCache();
-void syncDataToSupabase();
+void syncDataToSupabase({ showErrorToast: true });
 }
 
 function saveCustomCategories() {
 syncLocalCache();
-void syncDataToSupabase();
+void syncDataToSupabase({ showErrorToast: true });
 }
 
 function initSupabaseClient() {
@@ -185,12 +187,13 @@ return;
 try {
 const { data, error } = await supabaseClient
 .from('app_state')
-.select('thoughts, deleted_thoughts, custom_categories')
+.select('thoughts, deleted_thoughts, custom_categories, updated_at')
 .eq('id', APP_STATE_ROW_ID)
 .maybeSingle();
 
 if (error) {
 console.error('Supabase read failed:', error);
+showToast('Cloud read failed. Check network or Supabase policies.', 'warning');
 return;
 }
 
@@ -198,30 +201,34 @@ if (data) {
 thoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
 deletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
 customCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
+lastRemoteUpdatedAt = Date.parse(data.updated_at || '') || Date.now();
 const didNormalize = normalizeAllThoughtCoordinates();
 syncLocalCache();
 if (didNormalize) {
-void syncDataToSupabase();
+void syncDataToSupabase({ showErrorToast: false });
 }
 } else {
-await syncDataToSupabase();
+await syncDataToSupabase({ showErrorToast: true });
 }
 } catch (error) {
 console.error('Supabase load error:', error);
+showToast('Cloud sync unavailable right now.', 'warning');
 }
 }
 
-async function syncDataToSupabase() {
+async function syncDataToSupabase(options = {}) {
+const { showErrorToast = false } = options;
 if (!supabaseReady) {
-return;
+return false;
 }
 
+const nowIso = new Date().toISOString();
 const payload = {
 id: APP_STATE_ROW_ID,
 thoughts,
 deleted_thoughts: deletedThoughts,
 custom_categories: customCategories,
-updated_at: new Date().toISOString()
+updated_at: nowIso
 };
 
 try {
@@ -231,10 +238,82 @@ const { error } = await supabaseClient
 
 if (error) {
 console.error('Supabase sync failed:', error);
+if (showErrorToast) {
+showToast('Cloud save failed. Data is only on this device.', 'warning');
 }
+return false;
+}
+lastRemoteUpdatedAt = Date.parse(nowIso) || Date.now();
+return true;
 } catch (error) {
 console.error('Supabase sync error:', error);
+if (showErrorToast) {
+showToast('Cloud save failed. Data is only on this device.', 'warning');
 }
+return false;
+}
+}
+
+async function refreshDataFromSupabase(silent = true) {
+if (!supabaseReady) return false;
+
+try {
+const { data, error } = await supabaseClient
+.from('app_state')
+.select('thoughts, deleted_thoughts, custom_categories, updated_at')
+.eq('id', APP_STATE_ROW_ID)
+.maybeSingle();
+
+if (error || !data) {
+if (error) {
+console.error('Supabase refresh failed:', error);
+}
+return false;
+}
+
+const remoteUpdatedAt = Date.parse(data.updated_at || '') || 0;
+const shouldApply = remoteUpdatedAt > lastRemoteUpdatedAt || thoughts.length === 0;
+
+if (!shouldApply) {
+return false;
+}
+
+thoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
+deletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
+customCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
+lastRemoteUpdatedAt = remoteUpdatedAt || Date.now();
+
+normalizeAllThoughtCoordinates();
+syncLocalCache();
+renderStars();
+loadCustomCategories();
+updateRecycleBinCount();
+updateTimelineIfOpen();
+
+if (!silent) {
+showToast('Latest thoughts synced from cloud.', 'success');
+}
+return true;
+} catch (error) {
+console.error('Supabase refresh error:', error);
+return false;
+}
+}
+
+function startCloudSyncPolling() {
+if (!supabaseReady || cloudSyncIntervalId) {
+return;
+}
+
+cloudSyncIntervalId = setInterval(() => {
+void refreshDataFromSupabase(true);
+}, 10000);
+
+window.addEventListener('visibilitychange', () => {
+if (document.visibilityState === 'visible') {
+void refreshDataFromSupabase(true);
+}
+});
 }
 
 // ZOOM VARIABLES
@@ -260,6 +339,7 @@ createGalaxyMap();
 // Initialize Supabase and fetch latest state
 initSupabaseClient();
 await loadDataFromStorageAndSupabase();
+startCloudSyncPolling();
 
 // Load custom categories
 loadCustomCategories();
