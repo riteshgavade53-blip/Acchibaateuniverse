@@ -71,6 +71,12 @@
 <input type="text" id="searchInput" placeholder="Search the universe..." oninput="searchStars()">
 </div>
 
+<!-- Timeline Button (Owner + Visitor) -->
+<button id="timelineBtn" onclick="openTimeline()" title="Thought Timeline">
+<i class="fas fa-stream"></i>
+<span>Timeline</span>
+</button>
+
 <!-- Settings Panel (Owner Only) -->
 <div id="settingsPanel">
 <div class="settings-header">
@@ -407,6 +413,17 @@
 </div>
 </div>
 
+<!-- Thought Timeline Modal (Owner + Visitor) -->
+<div id="timelineModal" class="overlay">
+<div class="timeline-modal-card">
+<div class="timeline-header">
+<h2><i class="fas fa-stream"></i> Thought Timeline</h2>
+<button class="btn-secondary" onclick="closeTimeline()"><i class="fas fa-times"></i> Close</button>
+</div>
+<div class="timeline-list" id="timelineContent"></div>
+</div>
+</div>
+
 <!-- Import Progress Modal -->
 <div id="importProgressModal">
 <h3 style="color: var(--neon); margin-bottom: 15px;">Importing Data</h3>
@@ -485,7 +502,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./assets/js/supabase-config.js?v=20260301-3"></script>
-<script src="./assets/js/app.js?v=20260301-3"></script>
+<script src="./assets/js/supabase-config.js?v=20260301-4"></script>
+<script src="./assets/js/app.js?v=20260301-4"></script>
 </body>
 </html>
