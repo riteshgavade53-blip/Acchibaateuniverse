@@ -1,4 +1,4 @@
-﻿// GLOBAL VARIABLES
+// GLOBAL VARIABLES
 let thoughts = [];
 let deletedThoughts = [];
 let customCategories = readLocalJSON('custom_categories', []);
@@ -23,6 +23,100 @@ customCategories: 'custom_categories'
 const APP_STATE_ROW_ID = 'main';
 let supabaseClient = null;
 let supabaseReady = false;
+
+function clamp(value, min, max) {
+return Math.min(max, Math.max(min, value));
+}
+
+function getViewportWidth() {
+return Math.max(window.innerWidth || 0, 320);
+}
+
+function getViewportHeight() {
+return Math.max(window.innerHeight || 0, 480);
+}
+
+function normalizeStarCoordinates(star) {
+if (!star || typeof star !== 'object') return false;
+
+const viewportWidth = Number(star.viewportWidth) > 0 ? Number(star.viewportWidth) : 1366;
+const viewportHeight = Number(star.viewportHeight) > 0 ? Number(star.viewportHeight) : 768;
+
+const x = Number(star.x);
+const y = Number(star.y);
+const hasValidX = Number.isFinite(x);
+const hasValidY = Number.isFinite(y);
+
+const defaultXRatio = 0.5;
+const defaultYRatio = 0.5;
+
+const computedXRatio = hasValidX ? clamp(x / viewportWidth, 0.03, 0.97) : defaultXRatio;
+const computedYRatio = hasValidY ? clamp(y / viewportHeight, 0.08, 0.92) : defaultYRatio;
+
+const currentXRatio = Number(star.xRatio);
+const currentYRatio = Number(star.yRatio);
+const normalizedXRatio = Number.isFinite(currentXRatio) ? clamp(currentXRatio, 0.03, 0.97) : computedXRatio;
+const normalizedYRatio = Number.isFinite(currentYRatio) ? clamp(currentYRatio, 0.08, 0.92) : computedYRatio;
+
+const vw = getViewportWidth();
+const vh = getViewportHeight();
+const newX = Math.round(normalizedXRatio * vw);
+const newY = Math.round(normalizedYRatio * vh);
+
+const changed =
+star.xRatio !== normalizedXRatio ||
+star.yRatio !== normalizedYRatio ||
+star.x !== newX ||
+star.y !== newY ||
+star.viewportWidth !== vw ||
+star.viewportHeight !== vh;
+
+star.xRatio = normalizedXRatio;
+star.yRatio = normalizedYRatio;
+star.x = newX;
+star.y = newY;
+star.viewportWidth = vw;
+star.viewportHeight = vh;
+
+return changed;
+}
+
+function normalizeAllThoughtCoordinates() {
+let changed = false;
+thoughts.forEach((star) => {
+if (normalizeStarCoordinates(star)) {
+changed = true;
+}
+});
+return changed;
+}
+
+function getStarRenderPosition(star) {
+if (!star || typeof star !== 'object') {
+return { x: 0, y: 0 };
+}
+
+const vw = getViewportWidth();
+const vh = getViewportHeight();
+
+const ratioX = Number(star.xRatio);
+const ratioY = Number(star.yRatio);
+
+if (Number.isFinite(ratioX) && Number.isFinite(ratioY)) {
+return {
+x: Math.round(clamp(ratioX, 0.03, 0.97) * vw),
+y: Math.round(clamp(ratioY, 0.08, 0.92) * vh)
+};
+}
+
+const fallbackX = Number(star.x);
+const fallbackY = Number(star.y);
+
+return {
+x: Number.isFinite(fallbackX) ? clamp(Math.round(fallbackX), 0, vw) : Math.round(vw * 0.5),
+y: Number.isFinite(fallbackY) ? clamp(Math.round(fallbackY), 0, vh) : Math.round(vh * 0.5)
+};
+}
 
 function readLocalJSON(key, fallbackValue) {
 try {
@@ -79,6 +173,10 @@ async function loadDataFromStorageAndSupabase() {
 thoughts = readLocalJSON(STORAGE_KEYS.thoughts, []);
 deletedThoughts = readLocalJSON(STORAGE_KEYS.deletedThoughts, []);
 customCategories = readLocalJSON(STORAGE_KEYS.customCategories, []);
+const normalizedLocal = normalizeAllThoughtCoordinates();
+if (normalizedLocal) {
+syncLocalCache();
+}
 
 if (!supabaseReady) {
 return;
@@ -100,7 +198,11 @@ if (data) {
 thoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
 deletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
 customCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
+const didNormalize = normalizeAllThoughtCoordinates();
 syncLocalCache();
+if (didNormalize) {
+void syncDataToSupabase();
+}
 } else {
 await syncDataToSupabase();
 }
@@ -212,6 +314,14 @@ universeContainer.addEventListener('mouseleave', endDrag);
 universeContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
 universeContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
 universeContainer.addEventListener('touchend', endDrag);
+
+window.addEventListener('resize', () => {
+const changed = normalizeAllThoughtCoordinates();
+renderStars();
+if (changed) {
+saveThoughts();
+}
+});
 }
 
 // CUSTOM CATEGORIES FUNCTIONS
@@ -1338,6 +1448,7 @@ x: (window.innerWidth/2) + Math.cos(angle)*dist,
 y: (window.innerHeight/2) + Math.sin(angle)*dist,
 color: `hsl(${Math.random()*360}, 100%, 75%)`
 };
+normalizeStarCoordinates(star);
 
 thoughts.push(star);
 saveThoughts();
@@ -1360,10 +1471,11 @@ const field = document.getElementById('galaxy-field');
 field.innerHTML = '';
 
 thoughts.forEach((star, index) => {
+const pos = getStarRenderPosition(star);
 const starContainer = document.createElement('div');
 starContainer.style.position = 'absolute';
-starContainer.style.left = `${star.x}px`;
-starContainer.style.top = `${star.y}px`;
+starContainer.style.left = `${pos.x}px`;
+starContainer.style.top = `${pos.y}px`;
 
 const starElement = document.createElement('div');
 starElement.className = 'star-point';
@@ -1393,10 +1505,11 @@ field.appendChild(starContainer);
 
 function showTooltip(e, star) {
 const tooltip = document.getElementById('tooltip');
+const pos = getStarRenderPosition(star);
 tooltip.style.display = 'block';
 tooltip.innerText = star.text.substring(0, 30) + (star.text.length > 30 ? "..." : "");
-tooltip.style.left = (star.x + 15) + "px";
-tooltip.style.top = (star.y - 15) + "px";
+tooltip.style.left = (pos.x + 15) + "px";
+tooltip.style.top = (pos.y - 15) + "px";
 }
 
 function hideTooltip() {
@@ -1652,10 +1765,11 @@ const field = document.getElementById('galaxy-field');
 field.innerHTML = '';
 
 filtered.forEach((star, index) => {
+const pos = getStarRenderPosition(star);
 const starContainer = document.createElement('div');
 starContainer.style.position = 'absolute';
-starContainer.style.left = `${star.x}px`;
-starContainer.style.top = `${star.y}px`;
+starContainer.style.left = `${pos.x}px`;
+starContainer.style.top = `${pos.y}px`;
 
 const starElement = document.createElement('div');
 starElement.className = 'star-point';
@@ -1768,6 +1882,7 @@ x: fields[5] ? parseFloat(fields[5]) : (window.innerWidth/2) + (Math.random() * 
 y: fields[6] ? parseFloat(fields[6]) : (window.innerHeight/2) + (Math.random() * 200 - 100),
 color: fields[7] || `hsl(${Math.random()*360}, 100%, 75%)`
 };
+normalizeStarCoordinates(thought);
 
 importedThoughts.push(thought);
 
