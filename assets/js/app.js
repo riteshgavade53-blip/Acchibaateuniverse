@@ -281,6 +281,7 @@ setupVisitorMode();
 document.getElementById('ownerLoginPrompt').style.display = 'block';
 } else {
 document.getElementById('loginScreen').style.display = 'flex';
+document.getElementById('timelineBtn').style.display = 'none';
 }
 
 renderStars();
@@ -297,6 +298,11 @@ closeStarModal();
 const recycleModal = document.getElementById('recycleBinModal');
 if (event.target === recycleModal) {
 closeRecycleBin();
+}
+
+const timelineModal = document.getElementById('timelineModal');
+if (event.target === timelineModal) {
+closeTimeline();
 }
 });
 
@@ -846,6 +852,7 @@ document.querySelector('.fab-container').style.display = 'block';
 document.getElementById('modeSwitcher').style.display = 'flex';
 document.getElementById('modeSwitchText').textContent = 'Switch to Visitor';
 document.getElementById('recycleBinBtn').style.display = 'flex';
+document.getElementById('timelineBtn').style.display = 'flex';
 
 // Hide visitor-only elements
 document.getElementById('visitorInfo').style.display = 'none';
@@ -865,6 +872,7 @@ document.getElementById('ownerBadge').style.display = 'none';
 document.getElementById('writingPanel').style.display = 'none';
 document.querySelector('.fab-container').style.display = 'none';
 document.getElementById('recycleBinBtn').style.display = 'none';
+document.getElementById('timelineBtn').style.display = 'flex';
 
 // Show visitor-only elements
 document.getElementById('visitorInfo').style.display = 'block';
@@ -1504,6 +1512,8 @@ starElement.onclick = () => showStarModal(index);
 starContainer.appendChild(starElement);
 field.appendChild(starContainer);
 });
+
+updateTimelineIfOpen();
 }
 
 function showTooltip(e, star) {
@@ -1681,6 +1691,66 @@ renderLog();
 
 function closeLog() {
 document.getElementById('logModal').style.display = 'none';
+}
+
+function openTimeline() {
+document.getElementById('timelineModal').style.display = 'block';
+renderTimeline();
+}
+
+function closeTimeline() {
+document.getElementById('timelineModal').style.display = 'none';
+}
+
+function updateTimelineIfOpen() {
+const timelineModal = document.getElementById('timelineModal');
+if (timelineModal && timelineModal.style.display === 'block') {
+renderTimeline();
+}
+}
+
+function getThoughtTimestamp(star) {
+if (!star) return 0;
+const cleanedDate = String(star.date || '').replace(' (edited)', '').trim();
+const parsedTime = Date.parse(cleanedDate);
+if (!Number.isNaN(parsedTime)) {
+return parsedTime;
+}
+const numericId = Number(star.id);
+return Number.isFinite(numericId) ? numericId : 0;
+}
+
+function renderTimeline() {
+const container = document.getElementById('timelineContent');
+if (!container) return;
+
+if (!Array.isArray(thoughts) || thoughts.length === 0) {
+container.innerHTML = '<div class="timeline-empty">No thoughts yet. Create your first thought.</div>';
+return;
+}
+
+const sorted = thoughts
+.map((star, index) => ({ star, index }))
+.sort((a, b) => getThoughtTimestamp(b.star) - getThoughtTimestamp(a.star));
+
+container.innerHTML = sorted.map((item, position) => {
+const { star, index } = item;
+const safeText = (star.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const preview = safeText.length > 170 ? `${safeText.slice(0, 170)}...` : safeText;
+
+return `
+<div class="timeline-item" onclick="showStarModal(${index}); closeTimeline();">
+<div class="timeline-index">${position + 1}</div>
+<div>
+<div class="timeline-meta">
+<span class="timeline-date">${star.date || ''}</span>
+<span class="timeline-category">${star.category || 'general'}</span>
+</div>
+<div class="timeline-text">${preview || '(No text)'}</div>
+</div>
+</div>
+`;
+}).join('');
 }
 
 function renderLog(filter = 'all') {
