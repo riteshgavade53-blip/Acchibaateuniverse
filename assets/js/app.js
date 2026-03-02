@@ -342,15 +342,33 @@ if (!supabaseReady || cloudSyncIntervalId) {
 return;
 }
 
+const runCloudSyncCycle = async (silent = true) => {
+if (localDirty) {
+const pushed = await syncDataToSupabase({ showErrorToast: !silent });
+if (!pushed && !silent) {
+showToast('Cloud save pending. Will retry automatically.', 'warning');
+return false;
+}
+}
+
+return refreshDataFromSupabase(silent);
+};
+
 cloudSyncIntervalId = setInterval(() => {
-void refreshDataFromSupabase(true);
+void runCloudSyncCycle(true);
 }, 10000);
 
 window.addEventListener('visibilitychange', () => {
 if (document.visibilityState === 'visible') {
-void refreshDataFromSupabase(true);
+void runCloudSyncCycle(true);
 }
 });
+
+window.addEventListener('online', () => {
+void runCloudSyncCycle(false);
+});
+
+void runCloudSyncCycle(true);
 }
 
 // ZOOM VARIABLES
