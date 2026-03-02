@@ -1924,18 +1924,78 @@ showToast(`Sorted by ${by}`, 'info');
 }
 
 // SEARCH FUNCTIONS
+function normalizeSearchText(value) {
+return String(value || '')
+.toLowerCase()
+.replace(/\s+/g, ' ')
+.trim();
+}
+
+function stripHtmlTags(value) {
+return String(value || '').replace(/<[^>]*>/g, ' ');
+}
+
+function getStarSearchBlob(star) {
+if (!star || typeof star !== 'object') return '';
+const merged = `${star.text || ''} ${stripHtmlTags(star.html || '')} ${star.category || ''}`;
+return normalizeSearchText(merged);
+}
+
+function getSearchScore(query, searchBlob) {
+if (!query || !searchBlob) return 0;
+if (searchBlob.includes(query)) return 1;
+
+const queryWords = query.split(' ').filter((word) => word.length > 1);
+if (queryWords.length === 0) {
+return calculateSimilarity(query, searchBlob.slice(0, Math.max(60, query.length * 4)));
+}
+
+let matchedWords = 0;
+let fuzzyScoreTotal = 0;
+
+queryWords.forEach((word) => {
+if (searchBlob.includes(word)) {
+matchedWords += 1;
+fuzzyScoreTotal += 1;
+return;
+}
+
+const blobWords = searchBlob.split(' ').filter((blobWord) => blobWord.length > 1);
+let bestWordScore = 0;
+
+for (let i = 0; i < blobWords.length; i++) {
+const score = calculateSimilarity(word, blobWords[i]);
+if (score > bestWordScore) bestWordScore = score;
+if (bestWordScore > 0.9) break;
+}
+
+if (bestWordScore >= 0.65) {
+matchedWords += 1;
+}
+fuzzyScoreTotal += bestWordScore;
+});
+
+const coverageScore = matchedWords / queryWords.length;
+const averageFuzzyScore = fuzzyScoreTotal / queryWords.length;
+return Math.max(coverageScore, averageFuzzyScore);
+}
+
 function searchStars() {
-const query = document.getElementById('searchInput').value.toLowerCase();
+const query = normalizeSearchText(document.getElementById('searchInput').value);
 
 if (query === '') {
 renderStars();
 return;
 }
 
-const filtered = thoughts.filter(star =>
-star.text.toLowerCase().includes(query) ||
-star.category.toLowerCase().includes(query)
-);
+const filtered = thoughts
+.map((star) => ({
+star,
+score: getSearchScore(query, getStarSearchBlob(star))
+}))
+.filter((item) => item.score >= 0.55)
+.sort((a, b) => b.score - a.score)
+.map((item) => item.star);
 
 const field = document.getElementById('galaxy-field');
 field.innerHTML = '';
