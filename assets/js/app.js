@@ -25,6 +25,17 @@ let supabaseClient = null;
 let supabaseReady = false;
 let lastRemoteUpdatedAt = 0;
 let cloudSyncIntervalId = null;
+let localDirty = false;
+let lastSyncedStateSnapshot = '';
+
+function getStateSnapshot(input = {}) {
+const state = {
+thoughts: Array.isArray(input.thoughts) ? input.thoughts : thoughts,
+deletedThoughts: Array.isArray(input.deletedThoughts) ? input.deletedThoughts : deletedThoughts,
+customCategories: Array.isArray(input.customCategories) ? input.customCategories : customCategories
+};
+return JSON.stringify(state);
+}
 
 function clamp(value, min, max) {
 return Math.min(max, Math.max(min, value));
@@ -138,16 +149,19 @@ localStorage.setItem(STORAGE_KEYS.customCategories, JSON.stringify(customCategor
 
 function saveThoughts() {
 syncLocalCache();
+localDirty = true;
 void syncDataToSupabase({ showErrorToast: true });
 }
 
 function saveDeletedThoughts() {
 syncLocalCache();
+localDirty = true;
 void syncDataToSupabase({ showErrorToast: true });
 }
 
 function saveCustomCategories() {
 syncLocalCache();
+localDirty = true;
 void syncDataToSupabase({ showErrorToast: true });
 }
 
@@ -204,6 +218,8 @@ customCategories = Array.isArray(data.custom_categories) ? data.custom_categorie
 lastRemoteUpdatedAt = Date.parse(data.updated_at || '') || Date.now();
 const didNormalize = normalizeAllThoughtCoordinates();
 syncLocalCache();
+localDirty = false;
+lastSyncedStateSnapshot = getStateSnapshot();
 if (didNormalize) {
 void syncDataToSupabase({ showErrorToast: false });
 }
@@ -223,6 +239,10 @@ return false;
 }
 
 const nowIso = new Date().toISOString();
+const currentStateSnapshot = getStateSnapshot();
+if (currentStateSnapshot !== lastSyncedStateSnapshot) {
+localDirty = true;
+}
 const payload = {
 id: APP_STATE_ROW_ID,
 thoughts,
@@ -244,6 +264,8 @@ showToast('Cloud save failed. Data is only on this device.', 'warning');
 return false;
 }
 lastRemoteUpdatedAt = Date.parse(nowIso) || Date.now();
+localDirty = false;
+lastSyncedStateSnapshot = currentStateSnapshot;
 return true;
 } catch (error) {
 console.error('Supabase sync error:', error);
@@ -272,16 +294,31 @@ return false;
 }
 
 const remoteUpdatedAt = Date.parse(data.updated_at || '') || 0;
-const shouldApply = remoteUpdatedAt > lastRemoteUpdatedAt || thoughts.length === 0;
+const remoteThoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
+const remoteDeletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
+const remoteCustomCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
+const remoteSnapshot = getStateSnapshot({
+thoughts: remoteThoughts,
+deletedThoughts: remoteDeletedThoughts,
+customCategories: remoteCustomCategories
+});
+const localSnapshot = getStateSnapshot();
+const hasRemoteStateChanged = remoteSnapshot !== localSnapshot;
+const shouldApply =
+remoteUpdatedAt > lastRemoteUpdatedAt ||
+thoughts.length === 0 ||
+(!localDirty && hasRemoteStateChanged);
 
 if (!shouldApply) {
 return false;
 }
 
-thoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
-deletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
-customCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
+thoughts = remoteThoughts;
+deletedThoughts = remoteDeletedThoughts;
+customCategories = remoteCustomCategories;
 lastRemoteUpdatedAt = remoteUpdatedAt || Date.now();
+localDirty = false;
+lastSyncedStateSnapshot = remoteSnapshot;
 
 normalizeAllThoughtCoordinates();
 syncLocalCache();
@@ -383,6 +420,11 @@ closeRecycleBin();
 const timelineModal = document.getElementById('timelineModal');
 if (event.target === timelineModal) {
 closeTimeline();
+}
+
+const searchBar = document.getElementById('searchBar');
+if (searchBar && !searchBar.contains(event.target)) {
+hideSearchSuggestions();
 }
 });
 
@@ -1980,27 +2022,80 @@ const averageFuzzyScore = fuzzyScoreTotal / queryWords.length;
 return Math.max(coverageScore, averageFuzzyScore);
 }
 
+function escapeHtml(text) {
+return String(text || '')
+.replace(/&/g, '&amp;')
+.replace(/</g, '&lt;')
+.replace(/>/g, '&gt;')
+.replace(/"/g, '&quot;')
+.replace(/'/g, '&#39;');
+}
+
+function hideSearchSuggestions() {
+const container = document.getElementById('searchSuggestions');
+if (!container) return;
+container.classList.remove('show');
+container.innerHTML = '';
+}
+
+function renderSearchSuggestions(items) {
+const container = document.getElementById('searchSuggestions');
+if (!container) return;
+
+if (!Array.isArray(items) || items.length === 0) {
+container.innerHTML = '<div class="search-suggestion-empty">No matching thoughts.</div>';
+container.classList.add('show');
+return;
+}
+
+const topItems = items.slice(0, 7);
+container.innerHTML = topItems.map((item) => {
+const previewText = (item.star.text || stripHtmlTags(item.star.html || '') || '').trim();
+const preview = previewText.length > 80 ? `${previewText.slice(0, 80)}...` : previewText || '(No text)';
+return `
+<div class="search-suggestion-item" onclick="openStarFromSearchResult(${item.index})">
+<div class="search-suggestion-text">${escapeHtml(preview)}</div>
+<div class="search-suggestion-meta">
+<span class="search-suggestion-category">${escapeHtml(item.star.category || 'general')}</span>
+<span class="search-suggestion-date">${escapeHtml((item.star.date || '').split(',')[0])}</span>
+</div>
+</div>
+`;
+}).join('');
+
+container.classList.add('show');
+}
+
+function openStarFromSearchResult(index) {
+hideSearchSuggestions();
+showStarModal(index);
+}
+
 function searchStars() {
 const query = normalizeSearchText(document.getElementById('searchInput').value);
 
 if (query === '') {
 renderStars();
+hideSearchSuggestions();
 return;
 }
 
 const filtered = thoughts
-.map((star) => ({
+.map((star, index) => ({
+index,
 star,
 score: getSearchScore(query, getStarSearchBlob(star))
 }))
 .filter((item) => item.score >= 0.55)
 .sort((a, b) => b.score - a.score)
-.map((item) => item.star);
+
+renderSearchSuggestions(filtered);
 
 const field = document.getElementById('galaxy-field');
 field.innerHTML = '';
 
-filtered.forEach((star, index) => {
+filtered.forEach((item) => {
+const { star, index } = item;
 const pos = getStarRenderPosition(star);
 const starContainer = document.createElement('div');
 starContainer.style.position = 'absolute';
