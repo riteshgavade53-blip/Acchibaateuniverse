@@ -10,7 +10,6 @@ let duplicateCheckEnabled = true;
 let isOwner = false;
 let isLoggedInAsOwner = false;
 let editMode = false;
-const correctPass = "riteshsg@9054";
 
 // PERSISTENCE KEYS
 const STORAGE_KEYS = {
@@ -27,6 +26,7 @@ let lastRemoteUpdatedAt = 0;
 let cloudSyncIntervalId = null;
 let localDirty = false;
 let lastSyncedStateSnapshot = '';
+let authSubscription = null;
 
 function getStateSnapshot(input = {}) {
 const state = {
@@ -35,6 +35,82 @@ deletedThoughts: Array.isArray(input.deletedThoughts) ? input.deletedThoughts : 
 customCategories: Array.isArray(input.customCategories) ? input.customCategories : customCategories
 };
 return JSON.stringify(state);
+}
+
+function normalizeEmail(value) {
+return String(value || '').trim().toLowerCase();
+}
+
+function getAllowedAdminEmails() {
+const config = window.SUPABASE_CONFIG || {};
+if (!Array.isArray(config.adminEmails)) return [];
+return config.adminEmails.map(normalizeEmail).filter(Boolean);
+}
+
+function isAdminUser(user) {
+const email = normalizeEmail(user && user.email);
+if (!email) return false;
+const allowed = getAllowedAdminEmails();
+if (allowed.length === 0) return true;
+return allowed.includes(email);
+}
+
+function resetOwnerFlags() {
+isOwner = false;
+isLoggedInAsOwner = false;
+sessionStorage.setItem('isOwner', 'false');
+sessionStorage.setItem('isLoggedInAsOwner', 'false');
+}
+
+async function getCurrentAuthUser() {
+if (!supabaseReady || !supabaseClient || !supabaseClient.auth) {
+return null;
+}
+const { data, error } = await supabaseClient.auth.getUser();
+if (error) {
+console.error('Supabase auth getUser failed:', error);
+return null;
+}
+return data && data.user ? data.user : null;
+}
+
+function applyOwnerSessionToUI() {
+const preferredOwnerView = sessionStorage.getItem('isOwner') === 'true';
+if (isLoggedInAsOwner) {
+isOwner = preferredOwnerView || !sessionStorage.getItem('isOwner');
+document.getElementById('loginScreen').style.display = 'none';
+if (isOwner) {
+setupOwnerMode();
+} else {
+setupVisitorMode();
+document.getElementById('ownerLoginPrompt').style.display = 'block';
+}
+return;
+}
+
+document.getElementById('loginScreen').style.display = 'flex';
+document.getElementById('timelineBtn').style.display = 'none';
+}
+
+async function restoreOwnerAuthSession() {
+if (!supabaseReady || !supabaseClient || !supabaseClient.auth) {
+resetOwnerFlags();
+applyOwnerSessionToUI();
+return;
+}
+
+const user = await getCurrentAuthUser();
+if (user && isAdminUser(user)) {
+isLoggedInAsOwner = true;
+sessionStorage.setItem('isLoggedInAsOwner', 'true');
+} else {
+if (user && !isAdminUser(user)) {
+await supabaseClient.auth.signOut();
+showToast('This account is not allowed for admin mode.', 'error');
+}
+resetOwnerFlags();
+}
+applyOwnerSessionToUI();
 }
 
 function clamp(value, min, max) {
@@ -179,6 +255,21 @@ return;
 
 supabaseClient = window.supabase.createClient(config.url, config.anonKey);
 supabaseReady = true;
+
+if (supabaseClient.auth && typeof supabaseClient.auth.onAuthStateChange === 'function') {
+const { data } = supabaseClient.auth.onAuthStateChange((event, session) => {
+if (event === 'SIGNED_OUT') {
+resetOwnerFlags();
+applyOwnerSessionToUI();
+}
+if (event === 'SIGNED_IN' && session && session.user && isAdminUser(session.user)) {
+isLoggedInAsOwner = true;
+sessionStorage.setItem('isLoggedInAsOwner', 'true');
+applyOwnerSessionToUI();
+}
+});
+authSubscription = data && data.subscription ? data.subscription : null;
+}
 } catch (error) {
 console.error('Supabase init failed:', error);
 supabaseReady = false;
@@ -399,25 +490,7 @@ startCloudSyncPolling();
 // Load custom categories
 loadCustomCategories();
 
-// Check if user was previously logged in as owner
-const wasOwner = sessionStorage.getItem('isOwner') === 'true';
-const wasLoggedIn = sessionStorage.getItem('isLoggedInAsOwner') === 'true';
-
-if (wasLoggedIn) {
-isLoggedInAsOwner = true;
-isOwner = true;
-document.getElementById('loginScreen').style.display = 'none';
-setupOwnerMode();
-} else if (wasOwner) {
-isOwner = true;
-document.getElementById('loginScreen').style.display = 'none';
-setupVisitorMode();
-// Show owner login prompt
-document.getElementById('ownerLoginPrompt').style.display = 'block';
-} else {
-document.getElementById('loginScreen').style.display = 'flex';
-document.getElementById('timelineBtn').style.display = 'none';
-}
+await restoreOwnerAuthSession();
 
 renderStars();
 createShootingStars();
@@ -966,19 +1039,48 @@ setupVisitorMode();
 showToast('Welcome, Explorer! \u{1F30C}', 'info');
 }
 
-function unlock() {
-if(document.getElementById('passInput').value === correctPass) {
+async function unlock() {
+if (!supabaseReady || !supabaseClient || !supabaseClient.auth) {
+showToast('Supabase auth not ready. Check config.', 'error');
+return;
+}
+
+const emailInput = document.getElementById('ownerEmailInput');
+const passInput = document.getElementById('ownerPasswordInput');
+const email = normalizeEmail(emailInput && emailInput.value);
+const password = passInput ? passInput.value : '';
+
+if (!email || !password) {
+showToast('Enter admin email and password.', 'warning');
+if (emailInput && !email) shakeElement(emailInput);
+if (passInput && !password) shakeElement(passInput);
+return;
+}
+
+const { data, error } = await supabaseClient.auth.signInWithPassword({
+email,
+password
+});
+
+if (error || !data || !data.user) {
+showToast('Admin login failed. Check email/password.', 'error');
+if (passInput) shakeElement(passInput);
+return;
+}
+
+if (!isAdminUser(data.user)) {
+await supabaseClient.auth.signOut();
+showToast('This account is not allowed for admin mode.', 'error');
+return;
+}
+
 isOwner = true;
 isLoggedInAsOwner = true;
 sessionStorage.setItem('isOwner', 'true');
 sessionStorage.setItem('isLoggedInAsOwner', 'true');
 document.getElementById('loginScreen').style.display = 'none';
 setupOwnerMode();
-showToast('Welcome back, Universe Owner! \u{1F451}', 'success');
-} else {
-showToast('Incorrect Password! Try again.', 'error');
-shakeElement(document.getElementById('passInput'));
-}
+showToast('Secure admin login successful.', 'success');
 }
 
 // MODE SWITCHING FUNCTIONS
