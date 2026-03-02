@@ -699,13 +699,31 @@ universeContainer.style.transform = `translate(${translateX}px, ${translateY}px)
 document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
 }
 
+function isInteractiveTarget(target) {
+if (!target || typeof target.closest !== 'function') return false;
+
+return Boolean(
+target.closest('.star-point') ||
+target.closest('.planet') ||
+target.closest('.astronaut') ||
+target.closest('.modal') ||
+target.closest('.shiva-container') ||
+target.closest('.zoom-controls') ||
+target.closest('.fab-container') ||
+target.closest('#recycleBinBtn') ||
+target.closest('#searchBar') ||
+target.closest('#timelineBtn') ||
+target.closest('#writingPanel') ||
+target.closest('#modeSwitcher') ||
+target.closest('#visitorInfo') ||
+target.closest('#ownerLoginPrompt')
+);
+}
+
 // DRAG FUNCTIONS
 function startDrag(e) {
 // Check if clicking on interactive elements
-if (e.target.closest('.star-point') || e.target.closest('.planet') ||
-e.target.closest('.astronaut') || e.target.closest('.modal') ||
-e.target.closest('.shiva-container') || e.target.closest('.zoom-controls') ||
-e.target.closest('.fab-container') || e.target.closest('#recycleBinBtn')) {
+if (isInteractiveTarget(e.target)) {
 return;
 }
 
@@ -733,6 +751,11 @@ let touchStartDistance = 0;
 let touchStartZoom = 1;
 
 function handleTouchStart(e) {
+if (isInteractiveTarget(e.target)) {
+isDragging = false;
+return;
+}
+
 if (e.touches.length === 1) {
 // Single touch for dragging
 const touch = e.touches[0];
@@ -750,15 +773,15 @@ touchStartZoom = currentZoom;
 }
 
 function handleTouchMove(e) {
-e.preventDefault();
-
 if (e.touches.length === 1 && isDragging) {
+e.preventDefault();
 // Single touch for dragging
 const touch = e.touches[0];
 translateX = touch.clientX - startX;
 translateY = touch.clientY - startY;
 updateZoom();
 } else if (e.touches.length === 2) {
+e.preventDefault();
 // Two touches for pinching to zoom
 const dx = e.touches[0].clientX - e.touches[1].clientX;
 const dy = e.touches[0].clientY - e.touches[1].clientY;
