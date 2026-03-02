@@ -59,7 +59,8 @@
 </div>
 
 <div id="ownerLogin" style="display: none; margin-top: 20px;">
-<input type="password" id="passInput" placeholder="Enter your password" onkeypress="if(event.key === 'Enter') unlock()">
+<input type="email" id="ownerEmailInput" placeholder="Admin email" autocomplete="username" onkeypress="if(event.key === 'Enter') unlock()">
+<input type="password" id="ownerPasswordInput" placeholder="Admin password" autocomplete="current-password" onkeypress="if(event.key === 'Enter') unlock()">
 <button class="btn-main" onclick="unlock()">Unlock Universe</button>
 </div>
 </div>
@@ -504,6 +505,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./assets/js/supabase-config.js?v=20260302-1"></script>
-<script src="./assets/js/app.js?v=20260302-5"></script>
+<script src="./assets/js/app.js?v=20260302-6"></script>
 </body>
 </html>
