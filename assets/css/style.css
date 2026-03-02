@@ -53,6 +53,16 @@ cursor: grab;
 cursor: grabbing;
 }
 
+/* Anchor user-thought coordinates to the visual center viewport area */
+#galaxy-field {
+position: absolute;
+top: 200vh;
+left: 200vw;
+width: 100vw;
+height: 100vh;
+z-index: 12;
+}
+
 /* ENHANCED ZOOM CONTROLS */
 .zoom-controls {
 position: fixed;
