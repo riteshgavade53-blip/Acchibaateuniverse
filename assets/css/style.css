@@ -1785,6 +1785,7 @@ display: flex;
 align-items: center;
 z-index: 2500;
 transition: all 0.3s ease;
+overflow: visible;
 }
 
 #searchBar:focus-within {
@@ -1804,6 +1805,74 @@ margin-left: 10px;
 
 #searchBar i {
 color: var(--neon);
+}
+
+#searchSuggestions {
+position: absolute;
+top: calc(100% + 8px);
+left: 0;
+right: 0;
+display: none;
+max-height: min(55vh, 360px);
+overflow-y: auto;
+background: rgba(10, 14, 30, 0.96);
+backdrop-filter: blur(14px);
+border: 1px solid rgba(0, 242, 255, 0.28);
+border-radius: 14px;
+box-shadow: 0 14px 26px rgba(0, 0, 0, 0.45);
+padding: 8px;
+}
+
+#searchSuggestions.show {
+display: block;
+}
+
+.search-suggestion-item {
+padding: 10px 12px;
+border-radius: 10px;
+cursor: pointer;
+border: 1px solid transparent;
+transition: all 0.2s ease;
+}
+
+.search-suggestion-item + .search-suggestion-item {
+margin-top: 6px;
+}
+
+.search-suggestion-item:hover {
+background: rgba(0, 242, 255, 0.1);
+border-color: rgba(0, 242, 255, 0.35);
+}
+
+.search-suggestion-text {
+color: #fff;
+font-size: 14px;
+line-height: 1.4;
+margin-bottom: 4px;
+}
+
+.search-suggestion-meta {
+display: flex;
+justify-content: space-between;
+align-items: center;
+gap: 8px;
+font-size: 12px;
+color: rgba(255, 255, 255, 0.75);
+}
+
+.search-suggestion-category {
+color: var(--neon);
+font-weight: 700;
+}
+
+.search-suggestion-date {
+color: var(--gold);
+}
+
+.search-suggestion-empty {
+padding: 10px 12px;
+font-size: 13px;
+color: rgba(255, 255, 255, 0.75);
 }
 
 /* TIMELINE BUTTON */
@@ -2433,6 +2502,10 @@ bottom: 200px;
 width: 90%;
 top: 10px;
 padding: 9px 14px;
+}
+
+#searchSuggestions {
+max-height: 46vh;
 }
 
 #timelineBtn {
