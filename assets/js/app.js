@@ -89,6 +89,9 @@ return;
 }
 
 document.getElementById('loginScreen').style.display = 'flex';
+setupVisitorMode();
+document.getElementById('ownerLogin').style.display = 'none';
+document.getElementById('ownerLogoutBtn').style.display = 'none';
 document.getElementById('timelineBtn').style.display = 'none';
 }
 
@@ -848,6 +851,7 @@ target.closest('#searchBar') ||
 target.closest('#timelineBtn') ||
 target.closest('#writingPanel') ||
 target.closest('#modeSwitcher') ||
+target.closest('#ownerLogoutBtn') ||
 target.closest('#visitorInfo') ||
 target.closest('#ownerLoginPrompt')
 );
@@ -1083,6 +1087,27 @@ setupOwnerMode();
 showToast('Secure admin login successful.', 'success');
 }
 
+async function ownerLogout() {
+const emailInput = document.getElementById('ownerEmailInput');
+const passInput = document.getElementById('ownerPasswordInput');
+if (emailInput) emailInput.value = '';
+if (passInput) passInput.value = '';
+document.getElementById('ownerLogin').style.display = 'none';
+
+if (supabaseReady && supabaseClient && supabaseClient.auth) {
+const { error } = await supabaseClient.auth.signOut();
+if (error) {
+console.error('Supabase signOut failed:', error);
+showToast('Logout failed. Try again.', 'error');
+return;
+}
+}
+
+resetOwnerFlags();
+applyOwnerSessionToUI();
+showToast('Logged out from owner mode.', 'info');
+}
+
 // MODE SWITCHING FUNCTIONS
 function switchMode() {
 if (isLoggedInAsOwner) {
@@ -1115,6 +1140,7 @@ document.getElementById('ownerBadge').style.display = 'block';
 document.getElementById('writingPanel').style.display = 'block';
 document.querySelector('.fab-container').style.display = 'block';
 document.getElementById('modeSwitcher').style.display = 'flex';
+document.getElementById('ownerLogoutBtn').style.display = 'flex';
 document.getElementById('modeSwitchText').textContent = 'Switch to Visitor';
 document.getElementById('recycleBinBtn').style.display = 'flex';
 document.getElementById('timelineBtn').style.display = 'flex';
@@ -1145,10 +1171,12 @@ document.getElementById('visitorInfo').style.display = 'block';
 // Update mode switcher if logged in as owner
 if (isLoggedInAsOwner) {
 document.getElementById('modeSwitcher').style.display = 'flex';
+document.getElementById('ownerLogoutBtn').style.display = 'flex';
 document.getElementById('modeSwitchText').textContent = 'Switch to Owner';
 document.getElementById('ownerLoginPrompt').style.display = 'block';
 } else {
 document.getElementById('modeSwitcher').style.display = 'none';
+document.getElementById('ownerLogoutBtn').style.display = 'none';
 document.getElementById('ownerLoginPrompt').style.display = 'none';
 }
 
