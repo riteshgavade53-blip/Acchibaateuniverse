@@ -259,7 +259,14 @@ return '';
 }
 }
 
-return raw;
+return raw.replace(/^https?:\/\//, '').split('/')[0].trim();
+}
+
+function getRuntimeHostCandidates() {
+const host = window.location && window.location.host ? String(window.location.host).toLowerCase() : '';
+const hostname = window.location && window.location.hostname ? String(window.location.hostname).toLowerCase() : '';
+const hostWithoutPort = host.includes(':') ? host.split(':')[0] : host;
+return [host, hostname, hostWithoutPort].filter(Boolean);
 }
 
 function initSupabaseClient() {
@@ -270,12 +277,13 @@ console.warn('Supabase config missing. Running in local-only mode.');
 return;
 }
 if (Array.isArray(config.allowedHosts) && config.allowedHosts.length > 0) {
-const currentHost = window.location && window.location.host ? window.location.host.toLowerCase() : '';
 const allowed = config.allowedHosts
 .map((host) => normalizeAllowedHost(host))
 .filter(Boolean);
-if (!allowed.includes(currentHost)) {
-console.warn('Supabase disabled for this host:', currentHost);
+const currentCandidates = getRuntimeHostCandidates();
+const isAllowed = allowed.includes('*') || currentCandidates.some((candidate) => allowed.includes(candidate));
+if (!isAllowed) {
+console.warn('Supabase disabled for this host:', currentCandidates.join(', '), 'Allowed:', allowed.join(', '));
 return;
 }
 }
@@ -1115,10 +1123,22 @@ if (passInput && !password) shakeElement(passInput);
 return;
 }
 
-const { data, error } = await supabaseClient.auth.signInWithPassword({
+let data = null;
+let error = null;
+try {
+const result = await supabaseClient.auth.signInWithPassword({
 email,
 password
 });
+data = result && result.data ? result.data : null;
+error = result ? result.error : null;
+} catch (networkError) {
+const detail = networkError && networkError.message ? networkError.message : 'Network request could not reach Supabase';
+console.error('Supabase signIn network error:', networkError);
+showToast(`Admin login failed: ${detail}`, 'error');
+if (passInput) shakeElement(passInput);
+return;
+}
 
 if (error || !data || !data.user) {
 const detail = error && (error.message || error.details || error.code) ? ` (${error.message || error.details || error.code})` : '';
