@@ -245,6 +245,23 @@ localDirty = true;
 void syncDataToSupabase({ showErrorToast: true });
 }
 
+function normalizeAllowedHost(value) {
+const raw = String(value || '').trim().toLowerCase();
+if (!raw) return '';
+
+if (raw.includes('://')) {
+try {
+const parsed = new URL(raw);
+return (parsed.host || '').toLowerCase();
+} catch (error) {
+console.warn('Invalid allowed host URL:', raw, error);
+return '';
+}
+}
+
+return raw;
+}
+
 function initSupabaseClient() {
 try {
 const config = window.SUPABASE_CONFIG || {};
@@ -254,7 +271,9 @@ return;
 }
 if (Array.isArray(config.allowedHosts) && config.allowedHosts.length > 0) {
 const currentHost = window.location && window.location.host ? window.location.host.toLowerCase() : '';
-const allowed = config.allowedHosts.map((host) => String(host || '').trim().toLowerCase()).filter(Boolean);
+const allowed = config.allowedHosts
+.map((host) => normalizeAllowedHost(host))
+.filter(Boolean);
 if (!allowed.includes(currentHost)) {
 console.warn('Supabase disabled for this host:', currentHost);
 return;
