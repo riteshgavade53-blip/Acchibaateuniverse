@@ -27,6 +27,7 @@ let cloudSyncIntervalId = null;
 let localDirty = false;
 let lastSyncedStateSnapshot = '';
 let authSubscription = null;
+const API_STATE_ENDPOINT = '/api/state';
 
 function getStateSnapshot(input = {}) {
 const state = {
@@ -287,6 +288,44 @@ supabaseReady = false;
 }
 }
 
+function isApiAvailable() {
+return window.location && /^https?:$/.test(window.location.protocol);
+}
+
+async function fetchStateFromApi() {
+if (!isApiAvailable()) return null;
+
+try {
+const response = await fetch(API_STATE_ENDPOINT, { cache: 'no-store' });
+if (!response.ok) {
+throw new Error(`API ${response.status}`);
+}
+return await response.json();
+} catch (error) {
+console.error('API read failed:', error);
+return null;
+}
+}
+
+async function pushStateToApi(state) {
+if (!isApiAvailable()) return { ok: false };
+
+try {
+const response = await fetch(API_STATE_ENDPOINT, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(state)
+});
+if (!response.ok) {
+throw new Error(`API ${response.status}`);
+}
+return await response.json();
+} catch (error) {
+console.error('API write failed:', error);
+return { ok: false };
+}
+}
+
 async function loadDataFromStorageAndSupabase() {
 thoughts = readLocalJSON(STORAGE_KEYS.thoughts, []);
 deletedThoughts = readLocalJSON(STORAGE_KEYS.deletedThoughts, []);
@@ -296,28 +335,22 @@ if (normalizedLocal) {
 syncLocalCache();
 }
 
-if (!supabaseReady) {
+if (!isApiAvailable()) {
 return;
 }
 
 try {
-const { data, error } = await supabaseClient
-.from('app_state')
-.select('thoughts, deleted_thoughts, custom_categories, updated_at')
-.eq('id', APP_STATE_ROW_ID)
-.maybeSingle();
-
-if (error) {
-console.error('Supabase read failed:', error);
-showToast('Cloud read failed. Check network or Supabase policies.', 'warning');
+const data = await fetchStateFromApi();
+if (!data) {
+showToast('Cloud read failed. Check network or API.', 'warning');
 return;
 }
 
 if (data) {
 thoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
-deletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
-customCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
-lastRemoteUpdatedAt = Date.parse(data.updated_at || '') || Date.now();
+deletedThoughts = Array.isArray(data.deletedThoughts) ? data.deletedThoughts : [];
+customCategories = Array.isArray(data.customCategories) ? data.customCategories : [];
+lastRemoteUpdatedAt = Date.parse(data.updatedAt || '') || Date.now();
 const didNormalize = normalizeAllThoughtCoordinates();
 syncLocalCache();
 localDirty = false;
@@ -329,14 +362,14 @@ void syncDataToSupabase({ showErrorToast: false });
 await syncDataToSupabase({ showErrorToast: true });
 }
 } catch (error) {
-console.error('Supabase load error:', error);
+console.error('Cloud load error:', error);
 showToast('Cloud sync unavailable right now.', 'warning');
 }
 }
 
 async function syncDataToSupabase(options = {}) {
 const { showErrorToast = false } = options;
-if (!supabaseReady) {
+if (!isApiAvailable()) {
 return false;
 }
 
@@ -354,23 +387,25 @@ updated_at: nowIso
 };
 
 try {
-const { error } = await supabaseClient
-.from('app_state')
-.upsert(payload, { onConflict: 'id' });
+const result = await pushStateToApi({
+thoughts: payload.thoughts,
+deletedThoughts: payload.deleted_thoughts,
+customCategories: payload.custom_categories
+});
 
-if (error) {
-console.error('Supabase sync failed:', error);
+if (!result || !result.ok) {
+console.error('Cloud sync failed:', result);
 if (showErrorToast) {
 showToast('Cloud save failed. Data is only on this device.', 'warning');
 }
 return false;
 }
-lastRemoteUpdatedAt = Date.parse(nowIso) || Date.now();
+lastRemoteUpdatedAt = Date.parse(result.updatedAt || nowIso) || Date.now();
 localDirty = false;
 lastSyncedStateSnapshot = currentStateSnapshot;
 return true;
 } catch (error) {
-console.error('Supabase sync error:', error);
+console.error('Cloud sync error:', error);
 if (showErrorToast) {
 showToast('Cloud save failed. Data is only on this device.', 'warning');
 }
@@ -379,26 +414,18 @@ return false;
 }
 
 async function refreshDataFromSupabase(silent = true) {
-if (!supabaseReady) return false;
+if (!isApiAvailable()) return false;
 
 try {
-const { data, error } = await supabaseClient
-.from('app_state')
-.select('thoughts, deleted_thoughts, custom_categories, updated_at')
-.eq('id', APP_STATE_ROW_ID)
-.maybeSingle();
-
-if (error || !data) {
-if (error) {
-console.error('Supabase refresh failed:', error);
-}
+const data = await fetchStateFromApi();
+if (!data) {
 return false;
 }
 
-const remoteUpdatedAt = Date.parse(data.updated_at || '') || 0;
+const remoteUpdatedAt = Date.parse(data.updatedAt || '') || 0;
 const remoteThoughts = Array.isArray(data.thoughts) ? data.thoughts : [];
-const remoteDeletedThoughts = Array.isArray(data.deleted_thoughts) ? data.deleted_thoughts : [];
-const remoteCustomCategories = Array.isArray(data.custom_categories) ? data.custom_categories : [];
+const remoteDeletedThoughts = Array.isArray(data.deletedThoughts) ? data.deletedThoughts : [];
+const remoteCustomCategories = Array.isArray(data.customCategories) ? data.customCategories : [];
 const remoteSnapshot = getStateSnapshot({
 thoughts: remoteThoughts,
 deletedThoughts: remoteDeletedThoughts,
@@ -434,7 +461,7 @@ showToast('Latest thoughts synced from cloud.', 'success');
 }
 return true;
 } catch (error) {
-console.error('Supabase refresh error:', error);
+console.error('Cloud refresh error:', error);
 return false;
 }
 }
