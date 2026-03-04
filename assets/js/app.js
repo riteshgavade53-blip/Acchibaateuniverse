@@ -251,6 +251,14 @@ if (!config.url || !config.anonKey) {
 console.warn('Supabase config missing. Running in local-only mode.');
 return;
 }
+if (Array.isArray(config.allowedHosts) && config.allowedHosts.length > 0) {
+const currentHost = window.location && window.location.host ? window.location.host.toLowerCase() : '';
+const allowed = config.allowedHosts.map((host) => String(host || '').trim().toLowerCase()).filter(Boolean);
+if (!allowed.includes(currentHost)) {
+console.warn('Supabase disabled for this host:', currentHost);
+return;
+}
+}
 if (!window.supabase || typeof window.supabase.createClient !== 'function') {
 console.warn('Supabase library not loaded. Running in local-only mode.');
 return;
