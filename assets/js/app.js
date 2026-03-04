@@ -1067,7 +1067,8 @@ password
 });
 
 if (error || !data || !data.user) {
-showToast('Admin login failed. Check email/password.', 'error');
+const detail = error && (error.message || error.details || error.code) ? ` (${error.message || error.details || error.code})` : '';
+showToast(`Admin login failed. Check email/password.${detail}`, 'error');
 if (passInput) shakeElement(passInput);
 return;
 }
